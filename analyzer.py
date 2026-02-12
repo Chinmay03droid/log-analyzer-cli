@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 
 print("Running log analyzer...")
 
@@ -20,44 +21,64 @@ def analyze_logs(lines):
 
   return counts
 
-def generate_report(counts, filter_level=None):
+def generate_report(counts, filter_level=None,json_output=False):
+  total = sum(counts.values())
+
+  if filter_level and filter_level not in counts:
+    error = {"error": f"Invalid log level: {filter_level}"}
+    print(json.dumps(error) if json_output else error["error"])
+    return
+
+  if json_output:
+    if filter_level:
+      payload = {
+        filter_level: counts[filter_level],
+        "total": total
+      }
+    else:
+      payload = {
+          **counts,
+          "total": total
+      }
+    print(json.dumps(payload))
+    return
 
   print("Log Analysis Summary")
   print("---------------------")
-
-  total = sum(counts.values())
-
-  if filter_level:
-    if filter_level not in counts:
-      print(f"Invalid log level : {filter_level}")
-      return
-
-    count = counts[filter_level]
-    percent = (count / total) * 100 if total > 0 else 0
-    print(f"{filter_level}: {count} ({percent:.1f}%)")
-    return
 
   if total == 0:
     print("No log entries found.")
     return
 
+  if filter_level:
+    count = counts[filter_level]
+    percent = (count / total) * 100
+    print(f"{filter_level}: {count} ({percent:.1f}%)")
+    return
+
   for level, count in counts.items():
-    percent = (count/ total) * 100
+    percent = (count / total) * 100
     print(f"{level}: {count} ({percent:.1f}%)")
 
-LOG_FILE = sys.argv[1] if len(sys.argv) > 1 else "system.log"
-FILTER_LEVEL= sys.argv[2].upper() if len(sys.argv) > 2 else None
+
+args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+flags = [arg for arg in sys.argv[1:] if arg.startswith("--")]
+
+LOG_FILE = args[0] if len(args) > 0 else "system.log"
+CLI_FILTER = args[1].upper() if len(args) > 1 else None
+
+ENV_LOG_LEVEL = os.getenv("LOG_LEVEL")
+ENV_FILTER = ENV_LOG_LEVEL.upper() if ENV_LOG_LEVEL else None
+
+FILTER_LEVEL = CLI_FILTER if CLI_FILTER else ENV_FILTER
+JSON_OUTPUT = "--json" in flags
 
 if not os.path.exists(LOG_FILE):
   print(f"Error: {LOG_FILE} does not exist.")
-  exit(1)
+  sys.exit(1)
 
 lines = read_logs(LOG_FILE)
 counts = analyze_logs(lines)
-generate_report(counts, FILTER_LEVEL)
 
-if counts["ERROR"] > 0:
-  exit(2)
-else:
-  exit(0)
-
+generate_report(counts, FILTER_LEVEL,JSON_OUTPUT)
+sys.exit(2 if counts["ERROR"] > 0 else 0)
