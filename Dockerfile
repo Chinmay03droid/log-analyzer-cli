@@ -4,7 +4,7 @@ RUN useradd -m appuser
 
 WORKDIR /app
 
-COPY analyzer.py /app/analyzer.py
+COPY . /app
 
 RUN chmod +x /app/analyzer.py \
     && chown -R appuser:appuser /app
